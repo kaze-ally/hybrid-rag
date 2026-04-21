@@ -1,0 +1,10 @@
+__pycache__
+*.pyc
+*.pyo
+.env
+.git
+venv
+*.egg-info
+test_*.py
+cleanup.py
+check_*.py

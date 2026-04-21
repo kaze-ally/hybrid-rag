@@ -1,0 +1,11 @@
+Artificial intelligence is transforming industries across the world. Machine learning models can now process vast amounts of data efficiently. Deep learning has enabled breakthroughs in image recognition, speech processing, and language understanding.
+
+Large language models like LLaMA and GPT-4 are revolutionizing natural language processing. These models are trained on billions of tokens and can perform complex reasoning tasks. Fine-tuning allows companies to adapt these models for specific domains like healthcare and finance.
+
+Vector databases enable fast similarity search over millions of embeddings. Tools like Qdrant, Pinecone, and Weaviate store high-dimensional vectors and retrieve the most similar ones in milliseconds. This is essential for building production-grade RAG systems.
+
+Hybrid search combines keyword matching with semantic understanding for better retrieval results. BM25 is a classical keyword search algorithm that scores documents based on term frequency. When combined with vector search, hybrid systems outperform either method alone.
+
+RAG systems retrieve relevant documents before generating answers with an LLM. The quality of retrieval directly determines the quality of the final answer. Re-ranking with a cross-encoder further improves which chunks are passed to the language model.
+
+Semantic chunking splits documents where meaning changes rather than at fixed character counts. This preserves context and avoids splitting related ideas across chunks. The result is higher quality retrieval compared to naive fixed-size chunking.
