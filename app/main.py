@@ -33,9 +33,11 @@ app.include_router(router, prefix="/api/v1")
 
 @app.get("/")
 def root():
-    return {
-        "project": "Enterprise Hybrid RAG",
-        "version": "1.0.0",
-        "docs": "/docs",
-        "health": "/api/v1/health"
-    }
+    import os
+    static_path = "static/index.html"
+    abs_path = os.path.abspath(static_path)
+    exists = os.path.exists(static_path)
+    logger.info(f"Looking for static file at: {abs_path}, exists: {exists}")
+    if exists:
+        return FileResponse(static_path)
+    return {"error": f"static/index.html not found at {abs_path}"}
