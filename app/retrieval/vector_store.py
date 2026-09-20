@@ -8,7 +8,7 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-EMBEDDING_DIM = 384  # all-MiniLM-L6-v2 output dimension
+EMBEDDING_DIM = 3072  # gemini-embedding-001 output dimension
 
 _client = None
 def get_client() -> QdrantClient:

@@ -5,6 +5,8 @@ services:
       - "8000:8080"
     env_file:
       - .env
+    environment:
+      QDRANT_URL: http://qdrant:6333
     restart: always
     volumes:
       - ./data:/app/data

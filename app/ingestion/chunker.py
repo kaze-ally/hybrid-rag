@@ -2,7 +2,7 @@ from langchain_experimental.text_splitter import SemanticChunker
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_core.documents import Document
 from langchain_core.embeddings import Embeddings
-from app.ingestion.embedder import LocalEmbedder
+from app.ingestion.embedder import GeminiEmbedder
 import logging
 
 logger = logging.getLogger(__name__)
@@ -11,7 +11,7 @@ MAX_CHARS = 50_000  # Use fixed-size chunks for web pages and other long text.
 
 class GeminiEmbeddingsAdapter(Embeddings):
     def __init__(self):
-        self._embedder = LocalEmbedder()
+        self._embedder = GeminiEmbedder()
 
     def embed_documents(self, texts: list[str]) -> list[list[float]]:
         return self._embedder.embed_documents(texts)

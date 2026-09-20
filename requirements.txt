@@ -24,5 +24,4 @@ pypdf
 python-docx
 httpx
 python-multipart
-sentence-transformers
 pytest
