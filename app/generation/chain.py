@@ -35,7 +35,8 @@ def generate_answer(query: str, reranked_docs: list[Document]) -> dict:
         return {
             "answer": "No relevant documents found to answer your query.",
             "sources": [],
-            "chunks_used": 0
+            "chunks_used": 0,
+            "model": settings.llm_model
         }
 
     context = build_context(reranked_docs)

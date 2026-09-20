@@ -3,7 +3,6 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from contextlib import asynccontextmanager
 from app.api.routes import router
-from app.retrieval.bm25_store import load_bm25_from_qdrant
 from pathlib import Path
 import logging
 import os
@@ -21,11 +20,7 @@ async def lifespan(app: FastAPI):
     logger.info("Starting up...")
     logger.info(f"BASE_DIR: {BASE_DIR}")
     logger.info(f"static/index.html exists: {(BASE_DIR / 'static' / 'index.html').exists()}")
-    try:
-        load_bm25_from_qdrant()
-        logger.info("BM25 index ready")
-    except Exception as e:
-        logger.warning(f"BM25 load skipped: {e}")
+    logger.info("BM25 index will load after the first successful ingestion")
     yield
     logger.info("Shutting down")
 

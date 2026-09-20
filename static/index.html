@@ -556,11 +556,28 @@
 <script>
 const API = '';
 
+// Safely parse a fetch Response as JSON. Never throws the cryptic
+// "Unexpected end of JSON input" — instead surfaces what actually
+// came back (empty body, HTML error page, non-2xx status, etc.)
+// so the real problem is visible instead of a parse error.
+async function safeJson(r) {
+  const text = await r.text();
+  if (!text) {
+    throw new Error(`Server returned an empty response (HTTP ${r.status}${r.statusText ? ' ' + r.statusText : ''}). Is the backend running and reachable?`);
+  }
+  try {
+    return JSON.parse(text);
+  } catch {
+    const snippet = text.length > 200 ? text.slice(0, 200) + '…' : text;
+    throw new Error(`Server returned a non-JSON response (HTTP ${r.status}): ${snippet}`);
+  }
+}
+
 // Health check
 async function checkHealth() {
   try {
     const r = await fetch(`${API}/api/v1/health`);
-    const d = await r.json();
+    const d = await safeJson(r);
     const dot = document.getElementById('statusDot');
     const txt = document.getElementById('statusText');
     if (d.status === 'ok') {
@@ -571,6 +588,31 @@ async function checkHealth() {
 }
 checkHealth();
 setInterval(checkHealth, 30000);
+
+async function loadDocuments() {
+  try {
+    const r = await fetch(`${API}/api/v1/documents`);
+    const documents = await safeJson(r);
+    renderDocuments(documents);
+  } catch (err) {
+    console.warn('Could not load persisted documents:', err.message);
+  }
+}
+
+function renderDocuments(documents) {
+  const list = document.getElementById('docList');
+  list.innerHTML = '';
+  if (!documents.length) {
+    list.innerHTML = '<div class="empty-state">No documents yet.<br>Upload a file or paste a URL.</div>';
+    return;
+  }
+  documents.forEach(document => {
+    const type = document.source.startsWith('http') ? 'url' : 'file';
+    addDocToList(document.source, document.chunks, type);
+  });
+}
+
+loadDocuments();
 
 // Tabs
 function switchTab(name, btn) {
@@ -647,7 +689,7 @@ ingestFileBtn.addEventListener('click', async () => {
     const formData = new FormData();
     formData.append('file', currentFile);
     const r = await fetch(`${API}/api/v1/ingest/upload`, { method: 'POST', body: formData });
-    const data = await r.json();
+    const data = await safeJson(r);
 
     if (r.ok && data.job_id) {
       btnText.textContent = '⟳ Processing...';
@@ -679,7 +721,7 @@ ingestUrlBtn.addEventListener('click', async () => {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ source: url })
     });
-    const data = await r.json();
+    const data = await safeJson(r);
 
     if (r.ok && data.job_id) {
       btnText.textContent = '⟳ Processing...';
@@ -706,7 +748,7 @@ async function pollJob(jobId, displayName, type) {
     const interval = setInterval(async () => {
       try {
         const r = await fetch(`${API}/api/v1/jobs/${jobId}`);
-        const job = await r.json();
+        const job = await safeJson(r);
 
         // Update progress label with live status
         document.getElementById('progressLabel').textContent = job.message;
@@ -714,7 +756,7 @@ async function pollJob(jobId, displayName, type) {
         if (job.status === 'done') {
           clearInterval(interval);
           showToast('success', `✓ ${job.chunks_created} chunks ingested from "${displayName}"`);
-          addDocToList(displayName, job.chunks_created, type);
+          loadDocuments();
           resolve(job);
         } else if (job.status === 'error') {
           clearInterval(interval);
@@ -772,7 +814,7 @@ async function sendQuery() {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ query: q, top_k: topK, rerank_top_k: rerankK })
     });
-    const data = await r.json();
+    const data = await safeJson(r);
     removeThinking(thinkingId);
     if (r.ok) appendAnswer(data);
     else appendError(data.detail || 'Query failed');

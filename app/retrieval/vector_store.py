@@ -8,18 +8,20 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-EMBEDDING_DIM = 3072  # gemini-embedding-001 output dimension
+EMBEDDING_DIM = 384  # all-MiniLM-L6-v2 output dimension
 
 _client = None
-
 def get_client() -> QdrantClient:
     global _client
     if _client is None:
         _client = QdrantClient(
             url=settings.qdrant_url,
-            api_key=settings.qdrant_api_key or None
+            api_key=settings.qdrant_api_key or None,
+            timeout=60,
+            check_compatibility=False
         )
         logger.info("Connected to Qdrant")
+        ensure_collection()  # always ensure collection exists on startup
     return _client
 
 def ensure_collection():
