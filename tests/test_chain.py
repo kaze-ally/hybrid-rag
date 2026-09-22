@@ -1,23 +1,21 @@
 import pytest
-from app.generation.chain import RAGChain
+from langchain_core.documents import Document
+from app.generation.chain import build_context, generate_answer
 
-def test_rag_chain_initialization():
-    rag_chain = RAGChain()
-    assert rag_chain is not None
 
-def test_rag_chain_process():
-    rag_chain = RAGChain()
-    input_data = "Sample input for testing."
-    output = rag_chain.process(input_data)
-    assert isinstance(output, str)  # Assuming the output should be a string
-    assert len(output) > 0  # Ensure that some output is generated
+def test_build_context():
+    docs = [
+        Document(page_content="Content 1", metadata={"source": "doc1.txt", "rerank_score": 0.9}),
+        Document(page_content="Content 2", metadata={"source": "doc2.txt", "rerank_score": 0.8}),
+    ]
+    context = build_context(docs)
+    assert "Content 1" in context
+    assert "Content 2" in context
+    assert "doc1.txt" in context
 
-def test_rag_chain_with_empty_input():
-    rag_chain = RAGChain()
-    output = rag_chain.process("")
-    assert output == "No input provided."  # Assuming this is the expected behavior for empty input
 
-def test_rag_chain_with_invalid_input():
-    rag_chain = RAGChain()
-    output = rag_chain.process(None)
-    assert output == "Invalid input."  # Assuming this is the expected behavior for invalid input
+def test_generate_answer_empty():
+    result = generate_answer("test query", [])
+    assert "answer" in result
+    assert result["chunks_used"] == 0
+    assert result["sources"] == []

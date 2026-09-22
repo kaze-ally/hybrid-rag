@@ -1,36 +1,25 @@
 import pytest
-from app.ingestion.chunker import chunk_text
+from langchain_core.documents import Document
+from app.ingestion.chunker import chunk_documents
 
-def test_chunk_text():
-    text = "This is a sample document that needs to be chunked into smaller pieces."
-    expected_chunks = [
-        "This is a sample document",
-        "that needs to be chunked",
-        "into smaller pieces."
-    ]
-    
-    chunks = chunk_text(text, chunk_size=10)
-    
-    assert chunks == expected_chunks
 
-def test_chunk_text_empty():
-    text = ""
-    expected_chunks = []
-    
-    chunks = chunk_text(text, chunk_size=10)
-    
-    assert chunks == expected_chunks
+def test_chunk_documents():
+    doc = Document(
+        page_content="This is a test document that should be chunked into meaningful segments for retrieval.",
+        metadata={"source": "test.txt"}
+    )
+    chunks = chunk_documents([doc])
+    assert len(chunks) > 0
+    assert chunks[0].page_content
+    assert chunks[0].metadata["source"] == "test.txt"
 
-def test_chunk_text_long():
-    text = "This is a long document that should be chunked into multiple parts based on the specified size."
-    expected_chunks = [
-        "This is a long document",
-        "that should be chunked",
-        "into multiple parts",
-        "based on the specified",
-        "size."
-    ]
-    
-    chunks = chunk_text(text, chunk_size=10)
-    
-    assert chunks == expected_chunks
+
+def test_chunk_documents_empty():
+    chunks = chunk_documents([])
+    assert chunks == []
+
+
+def test_chunk_documents_whitespace():
+    doc = Document(page_content="   \n\n   ", metadata={"source": "empty.txt"})
+    chunks = chunk_documents([doc])
+    assert chunks == []

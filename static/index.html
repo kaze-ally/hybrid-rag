@@ -106,6 +106,8 @@
   .status-dot { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--muted); }
   .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--muted); }
   .dot.online { background: var(--accent3); box-shadow: 0 0 6px var(--accent3); animation: pulse 2s infinite; }
+  .dot.warning { background: #f59e0b; box-shadow: 0 0 6px rgba(245,158,11,0.5); }
+  .dot.error { background: var(--danger); box-shadow: 0 0 6px rgba(239,68,68,0.5); }
 
   @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.5} }
 
@@ -487,7 +489,10 @@
     </div>
 
     <div>
-      <div class="section-label">📚 Ingested Documents</div>
+      <div class="section-label" style="display:flex;justify-content:space-between;align-items:center;">
+        <span>📚 Ingested Documents</span>
+        <button onclick="loadDocuments()" title="Refresh document list" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:12px;padding:2px 6px;border-radius:4px;transition:color 0.2s;" onmouseover="this.style.color='var(--accent)'" onmouseout="this.style.color='var(--muted)'">⟳ Refresh</button>
+      </div>
       <div class="doc-list" id="docList">
         <div class="empty-state">No documents yet.<br>Upload a file or paste a URL.</div>
       </div>
@@ -580,29 +585,61 @@ async function checkHealth() {
     const d = await safeJson(r);
     const dot = document.getElementById('statusDot');
     const txt = document.getElementById('statusText');
-    if (d.status === 'ok') {
+    const qdrantMsg = d.qdrant || '';
+    const hasQdrantError = qdrantMsg.toLowerCase().includes('error');
+
+    if (d.status === 'ok' && !hasQdrantError) {
       dot.className = 'dot online';
       txt.textContent = `API online · Qdrant ${d.qdrant}`;
-    } else { dot.className = 'dot'; txt.textContent = 'API error'; }
-  } catch { document.getElementById('statusDot').className = 'dot'; document.getElementById('statusText').textContent = 'API offline'; }
+      txt.style.color = '';
+    } else if (hasQdrantError) {
+      dot.className = 'dot error';
+      txt.textContent = `API running · Qdrant error`;
+      txt.title = d.qdrant;
+      txt.style.color = '#f87171';
+    } else if (d.status === 'degraded') {
+      dot.className = 'dot warning';
+      txt.textContent = `API degraded · Qdrant ${d.qdrant}`;
+      txt.style.color = '#f59e0b';
+    } else {
+      dot.className = 'dot error';
+      txt.textContent = 'API error';
+      txt.style.color = '#f87171';
+    }
+  } catch (err) {
+    document.getElementById('statusDot').className = 'dot error';
+    const txt = document.getElementById('statusText');
+    txt.textContent = 'API offline';
+    txt.style.color = '#f87171';
+  }
 }
 checkHealth();
 setInterval(checkHealth, 30000);
 
 async function loadDocuments() {
+  const list = document.getElementById('docList');
   try {
     const r = await fetch(`${API}/api/v1/documents`);
+    if (!r.ok) {
+      const errData = await safeJson(r).catch(() => ({}));
+      throw new Error(errData.detail || `Server error (HTTP ${r.status})`);
+    }
     const documents = await safeJson(r);
     renderDocuments(documents);
   } catch (err) {
     console.warn('Could not load persisted documents:', err.message);
+    list.innerHTML = `<div class="empty-state" style="color:#f87171;">
+      Failed to load documents.<br>
+      <span style="font-size:10px;opacity:0.8;">${escapeHtml(err.message)}</span><br>
+      <button onclick="loadDocuments()" style="margin-top:8px;padding:4px 10px;font-size:10px;cursor:pointer;background:var(--surface2);border:1px solid var(--border);color:var(--text);border-radius:4px;">⟳ Retry</button>
+    </div>`;
   }
 }
 
 function renderDocuments(documents) {
   const list = document.getElementById('docList');
   list.innerHTML = '';
-  if (!documents.length) {
+  if (!Array.isArray(documents) || !documents.length) {
     list.innerHTML = '<div class="empty-state">No documents yet.<br>Upload a file or paste a URL.</div>';
     return;
   }
@@ -745,28 +782,45 @@ ingestUrlBtn.addEventListener('click', async () => {
 // Poll job status every 3 seconds
 async function pollJob(jobId, displayName, type) {
   return new Promise((resolve) => {
+    let pollCount = 0;
+    const maxPolls = 120; // 6 minutes max
     const interval = setInterval(async () => {
+      pollCount++;
       try {
         const r = await fetch(`${API}/api/v1/jobs/${jobId}`);
+        if (!r.ok) {
+          const errData = await safeJson(r).catch(() => ({ detail: `HTTP ${r.status}` }));
+          clearInterval(interval);
+          showToast('error', `✗ Ingestion job failed: ${errData.detail || r.statusText}`);
+          resolve(null);
+          return;
+        }
         const job = await safeJson(r);
 
         // Update progress label with live status
-        document.getElementById('progressLabel').textContent = job.message;
+        if (job.message) {
+          document.getElementById('progressLabel').textContent = job.message;
+        }
 
         if (job.status === 'done') {
           clearInterval(interval);
-          showToast('success', `✓ ${job.chunks_created} chunks ingested from "${displayName}"`);
+          const chunkMsg = job.chunks_created != null ? `${job.chunks_created} chunks` : 'Content';
+          showToast('success', `✓ ${chunkMsg} ingested from "${displayName}"`);
           loadDocuments();
           resolve(job);
         } else if (job.status === 'error') {
           clearInterval(interval);
-          showToast('error', `✗ ${job.message}`);
+          showToast('error', `✗ Ingestion failed: ${job.message}`);
+          resolve(null);
+        } else if (pollCount >= maxPolls) {
+          clearInterval(interval);
+          showToast('error', '✗ Ingestion timed out after 6 minutes. Please check server logs.');
           resolve(null);
         }
         // if 'pending' or 'processing' — keep polling
       } catch (err) {
         clearInterval(interval);
-        showToast('error', `✗ Polling error: ${err.message}`);
+        showToast('error', `✗ Ingestion check error: ${err.message}`);
         resolve(null);
       }
     }, 3000); // poll every 3 seconds

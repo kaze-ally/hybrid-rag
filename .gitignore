@@ -21,3 +21,5 @@ wheels/
 *.egg
 .venv/
 venv/
+data/qdrant_storage/
+data/test_*

@@ -1,39 +1,31 @@
 import pytest
-from app.retrieval.vector_store import VectorStore
-from app.retrieval.bm25_store import BM25Store
-from app.retrieval.hybrid import HybridRetrieval
+from langchain_core.documents import Document
+from app.retrieval.hybrid import reciprocal_rank_fusion
+from app.retrieval.bm25_store import build_bm25_index, bm25_search
 
-@pytest.fixture
-def setup_retrieval():
-    vector_store = VectorStore()
-    bm25_store = BM25Store()
-    hybrid_retrieval = HybridRetrieval(vector_store, bm25_store)
-    return hybrid_retrieval
 
-def test_hybrid_retrieval(setup_retrieval):
-    hybrid = setup_retrieval
-    query = "Sample query for testing"
-    
-    results = hybrid.retrieve(query)
-    
-    assert results is not None
-    assert isinstance(results, list)
-    assert len(results) > 0
+def test_reciprocal_rank_fusion():
+    v_docs = [
+        Document(page_content="Common doc", metadata={"source": "doc1"}),
+        Document(page_content="Vector only", metadata={"source": "doc2"}),
+    ]
+    b_docs = [
+        Document(page_content="BM25 only", metadata={"source": "doc3"}),
+        Document(page_content="Common doc", metadata={"source": "doc1"}),
+    ]
+    fused = reciprocal_rank_fusion(v_docs, b_docs)
+    assert len(fused) == 3
+    # Common doc should have highest rank because it appears in both
+    assert fused[0].page_content == "Common doc"
+    assert "hybrid_score" in fused[0].metadata
 
-def test_vector_store_integration(setup_retrieval):
-    hybrid = setup_retrieval
-    query = "Test vector store integration"
-    
-    vector_results = hybrid.vector_store.retrieve(query)
-    
-    assert vector_results is not None
-    assert isinstance(vector_results, list)
 
-def test_bm25_store_integration(setup_retrieval):
-    hybrid = setup_retrieval
-    query = "Test BM25 store integration"
-    
-    bm25_results = hybrid.bm25_store.retrieve(query)
-    
-    assert bm25_results is not None
-    assert isinstance(bm25_results, list)
+def test_bm25_search():
+    chunks = [
+        Document(page_content="Machine learning is fascinating and powerful.", metadata={"source": "ml.txt"}),
+        Document(page_content="Cooking pasta requires boiling water and salt.", metadata={"source": "cook.txt"}),
+    ]
+    build_bm25_index(chunks)
+    results = bm25_search("machine learning", top_k=2)
+    assert len(results) >= 1
+    assert "machine learning" in results[0].page_content.lower()

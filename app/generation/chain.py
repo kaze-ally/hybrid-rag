@@ -5,8 +5,6 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-client = Groq(api_key=settings.groq_api_key)
-
 SYSTEM_PROMPT = """You are a helpful AI assistant that answers questions based strictly on the provided context.
 
 Rules:
@@ -14,6 +12,13 @@ Rules:
 - If the context doesn't contain enough information, say "I don't have enough information in the provided documents to answer this."
 - Be concise and accurate
 - Cite which part of the context supports your answer"""
+
+
+def get_groq_client() -> Groq:
+    if not settings.groq_api_key:
+        raise ValueError("GROQ_API_KEY is not configured.")
+    return Groq(api_key=settings.groq_api_key)
+
 
 def build_context(docs: list[Document]) -> str:
     """Format reranked docs into a context string for the LLM."""
@@ -26,10 +31,11 @@ def build_context(docs: list[Document]) -> str:
         )
     return "\n\n---\n\n".join(context_parts)
 
+
 def generate_answer(query: str, reranked_docs: list[Document]) -> dict:
     """
     Generate answer from reranked docs using Groq LLM.
-    Returns answer + metadata about what was used.
+    Returns answer + metadata about what was used with robust fallback on API error.
     """
     if not reranked_docs:
         return {
@@ -39,33 +45,43 @@ def generate_answer(query: str, reranked_docs: list[Document]) -> dict:
             "model": settings.llm_model
         }
 
-    context = build_context(reranked_docs)
-
-    messages = [
-        {"role": "system", "content": SYSTEM_PROMPT},
-        {"role": "user", "content": f"Context:\n{context}\n\nQuestion: {query}"}
-    ]
-
-    logger.info(f"Generating answer with {len(reranked_docs)} chunks...")
-
-    response = client.chat.completions.create(
-        model=settings.llm_model,
-        messages=messages,
-        max_tokens=1024,
-        temperature=0.1  # low temp for factual answers
-    )
-
-    answer = response.choices[0].message.content
-
     sources = list(set(
         doc.metadata.get("source", "unknown") for doc in reranked_docs
     ))
 
-    logger.info("Answer generated successfully")
+    try:
+        client = get_groq_client()
+        context = build_context(reranked_docs)
 
-    return {
-        "answer": answer,
-        "sources": sources,
-        "chunks_used": len(reranked_docs),
-        "model": settings.llm_model
-    }
+        messages = [
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "user", "content": f"Context:\n{context}\n\nQuestion: {query}"}
+        ]
+
+        logger.info(f"Generating answer with {len(reranked_docs)} chunks using model {settings.llm_model}...")
+
+        response = client.chat.completions.create(
+            model=settings.llm_model,
+            messages=messages,
+            max_tokens=1024,
+            temperature=0.1
+        )
+
+        answer = response.choices[0].message.content or "No response generated."
+        logger.info("Answer generated successfully")
+
+        return {
+            "answer": answer,
+            "sources": sources,
+            "chunks_used": len(reranked_docs),
+            "model": settings.llm_model
+        }
+
+    except Exception as e:
+        logger.error(f"Error generating answer with Groq: {e}")
+        return {
+            "answer": f"Unable to generate response from model ({e}). However, {len(reranked_docs)} relevant context chunk(s) were found.",
+            "sources": sources,
+            "chunks_used": len(reranked_docs),
+            "model": settings.llm_model
+        }

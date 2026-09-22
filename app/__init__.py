@@ -1,1 +1,1 @@
-# This file initializes the app package.
+# This file initializes the ingestion package.
